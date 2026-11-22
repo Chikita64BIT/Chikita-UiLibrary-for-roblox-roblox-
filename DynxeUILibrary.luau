@@ -175,9 +175,9 @@ local player = Players.LocalPlayer
 	currentTitle.Position = UDim2.new(1, -175, 0, 24)
 	currentTitle.Size = UDim2.fromOffset(103, 22)
 
-	header.Active = true
+	local dragArea = make("Frame", {Name = "Arrastar", Active = true, BackgroundTransparency = 1, Size = UDim2.new(1,-62,1,0), ZIndex = 2}, header)
 	local pointer, grab
-	header.InputBegan:Connect(function(input)
+	dragArea.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			pointer = input
 			grab = Vector2.new(input.Position.X, input.Position.Y) - root.AbsolutePosition - root.AbsoluteSize / 2
@@ -192,6 +192,8 @@ local player = Players.LocalPlayer
 		if pointer == input then pointer = nil end
 	end)
 
+	local window = {Gui = gui, Root = root, _selected = nil}
+	local toggleBinding = {key = options.ToggleKey or Enum.KeyCode.RightShift}
 	local bindings = {}
 	local capturing
 	listen(UserInputService.InputBegan, function(input, processed)
@@ -200,6 +202,8 @@ local player = Players.LocalPlayer
 			if input.KeyCode ~= Enum.KeyCode.Escape then capturing.key = input.KeyCode end
 			capturing.display.Text = capturing.key.Name
 			capturing = nil
+		elseif input.KeyCode == toggleBinding.key then
+			window:SetVisible(not window.Visible)
 		elseif not processed then
 			for _, binding in bindings do
 				if binding.key == input.KeyCode then safeCall(binding.callback) end
@@ -211,12 +215,15 @@ local player = Players.LocalPlayer
 		BackgroundTransparency = 1, ClipsDescendants = true,
 	}, root)
 
-	local window = {Gui = gui, Root = root, _selected = nil}
+
 	local close = button(header, "×", 25)
 	close.Name = "Fechar"
+	close.ZIndex = 3
 	close.Size = UDim2.fromOffset(44,44)
 	close.Position = UDim2.new(1,-56,0,16)
-	local reopen = button(gui, "Abrir painel", 15)
+	local launcher = make("ScreenGui", {Name = gui.Name .. "Launcher", ResetOnSpawn = false, DisplayOrder = gui.DisplayOrder + 1}, gui.Parent)
+	gui.Destroying:Connect(function() launcher:Destroy() end)
+	local reopen = button(launcher, "Abrir painel", 15)
 	reopen.Name = "Reabrir"
 	reopen.Size = UDim2.fromOffset(116,44)
 	reopen.Position = UDim2.new(1,-132,0.5,-22)
@@ -226,6 +233,7 @@ local player = Players.LocalPlayer
 	function window:SetVisible(visible)
 		if self.Visible == visible then return end
 		self.Visible = visible
+		if visible then gui.Enabled = true end
 		pointer = nil
 		if capturing then
 			capturing.display.Text = capturing.key.Name
@@ -241,6 +249,7 @@ local player = Players.LocalPlayer
 		tween.Completed:Once(function(state)
 			if transition ~= tween or state ~= Enum.PlaybackState.Completed then return end
 			root.Visible = visible
+			gui.Enabled = visible
 			transition = nil
 		end)
 		tween:Play()
@@ -467,17 +476,24 @@ local player = Players.LocalPlayer
 			box.FocusLost:Connect(function() safeCall(callback,box.Text) end)
 			return box
 		end
-		function tab:AddKeybind(text, key, callback)
-			local field = button(control(text), key.Name)
+		local function keyField(text, binding)
+			local field = button(control(text), binding.key.Name)
 			align(field)
-			local binding = {key = key, callback = callback, display = field}
-			table.insert(bindings,binding)
+			binding.display = field
 			field.Activated:Connect(function()
 				if capturing then capturing.display.Text = capturing.key.Name end
 				capturing = binding
 				field.Text = "Pressione uma tecla"
 			end)
 			return field
+		end
+		function tab:AddWindowKeybind(text)
+			return keyField(text, toggleBinding)
+		end
+		function tab:AddKeybind(text, key, callback)
+			local binding = {key = key, callback = callback}
+			table.insert(bindings, binding)
+			return keyField(text, binding)
 		end
 		function tab:AddDropdown(text, choices, initial, callback)
 			local row = control(text)
