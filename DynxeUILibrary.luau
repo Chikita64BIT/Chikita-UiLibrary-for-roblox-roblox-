@@ -267,7 +267,21 @@ local player = Players.LocalPlayer
 	function window:CreateTab(name, icon)
 		tabCount += 1
 		local index = tabCount
-		local nav = button(rail, icon or "□", 25)
+		local source = tostring(icon or "")
+		local image
+		if source:match("^%d+$") then
+			image = "rbxassetid://" .. source
+		elseif source:match("^rbxassetid://%d+$") or source:match("^rbxasset://") then
+			image = source
+		end
+		local nav = button(rail, image and "" or (icon or "□"), 25)
+		if image then
+			make("ImageLabel", {
+				Name = "Icon", Image = image, BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(24, 24), ScaleType = Enum.ScaleType.Fit,
+			}, nav)
+		end
 		nav.Name = name .. "TabButton"
 		nav.Size = UDim2.fromOffset(43, 43)
 		nav.BackgroundTransparency = 1
