@@ -17,7 +17,7 @@ local C = {
 	line = Color3.fromRGB(43, 45, 52),
 	text = Color3.fromRGB(225, 228, 234),
 	muted = Color3.fromRGB(137, 141, 152),
-	blue = Color3.fromRGB(91, 111, 241),
+	blue = Color3.fromRGB(81, 200, 178),
 	green = Color3.fromRGB(79, 198, 121),
 }
 
@@ -76,15 +76,27 @@ function Library:CreateWindow(options)
 
 	local root = make("Frame", {
 		Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(760, 900),
+		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(620, 636),
 		BackgroundColor3 = C.background, BorderSizePixel = 0, ClipsDescendants = true,
 	}, gui)
 	corner(root, 13)
 	stroke(root, Color3.fromRGB(37, 39, 46))
 	local scale = make("UIScale", {Scale = 1}, root)
+	local connections = {}
+	local function listen(signal, callback)
+		table.insert(connections, signal:Connect(callback))
+	end
+	local function place(center)
+		local screen = gui.AbsoluteSize
+		local half = root.AbsoluteSize / 2
+		local x = math.clamp(center.X, half.X, math.max(half.X, screen.X - half.X))
+		local y = math.clamp(center.Y, half.Y, math.max(half.Y, screen.Y - half.Y))
+		root.Position = UDim2.fromOffset(x, y)
+	end
 	local function resize()
 		local view = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-		scale.Scale = math.min(1, (view.X - 24) / 760, (view.Y - 24) / 900)
+		scale.Scale = math.max(0.01, math.min(options.Scale or 0.8, (view.X - 24) / 620, (view.Y - 24) / 636))
+		if root.Position.X.Scale == 0 then place(Vector2.new(root.Position.X.Offset, root.Position.Y.Offset)) end
 	end
 	resize()
 	local cameraConnection
@@ -95,7 +107,11 @@ function Library:CreateWindow(options)
 		end
 		resize()
 	end
-	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
+	listen(workspace:GetPropertyChangedSignal("CurrentCamera"), watchCamera)
+	gui.Destroying:Connect(function()
+		if cameraConnection then cameraConnection:Disconnect() end
+		for _, connection in connections do connection:Disconnect() end
+	end)
 	watchCamera()
 
 	local side = make("Frame", {
@@ -123,6 +139,37 @@ function Library:CreateWindow(options)
 	currentTitle.Position = UDim2.new(1, -120, 0, 24)
 	currentTitle.Size = UDim2.fromOffset(103, 22)
 
+	header.Active = true
+	local pointer, grab
+	header.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			pointer = input
+			grab = Vector2.new(input.Position.X, input.Position.Y) - root.AbsolutePosition - root.AbsoluteSize / 2
+		end
+	end)
+	listen(UserInputService.InputChanged, function(input)
+		if pointer and (input == pointer or (pointer.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement)) then
+			place(Vector2.new(input.Position.X, input.Position.Y) - grab)
+		end
+	end)
+	listen(UserInputService.InputEnded, function(input)
+		if pointer == input then pointer = nil end
+	end)
+
+	local bindings = {}
+	local capturing
+	listen(UserInputService.InputBegan, function(input, processed)
+		if input.UserInputType ~= Enum.UserInputType.Keyboard or UserInputService:GetFocusedTextBox() then return end
+		if capturing then
+			if input.KeyCode ~= Enum.KeyCode.Escape then capturing.key = input.KeyCode end
+			capturing.display.Text = capturing.key.Name
+			capturing = nil
+		elseif not processed then
+			for _, binding in bindings do
+				if binding.key == input.KeyCode then safeCall(binding.callback) end
+			end
+		end
+	end)
 	local pages = make("Frame", {
 		Position = UDim2.fromOffset(65, 77), Size = UDim2.new(1, -65, 1, -77),
 		BackgroundTransparency = 1, ClipsDescendants = true,
@@ -157,7 +204,7 @@ function Library:CreateWindow(options)
 			end
 			page.Visible = true
 			currentTitle.Text = string.upper(name)
-			animate(nav, {BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(31, 41, 88), TextColor3 = C.blue})
+			animate(nav, {BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(29, 65, 62), TextColor3 = C.blue})
 			window._selected = {page = page, nav = nav}
 		end
 		nav.MouseButton1Click:Connect(selectTab)
@@ -176,7 +223,7 @@ function Library:CreateWindow(options)
 				BackgroundTransparency = 1,
 			}, page)
 			local grid = make("UIGridLayout", {
-				CellSize = UDim2.new(0.25, -7, 0, 170), CellPadding = UDim2.fromOffset(7, 8),
+				CellSize = UDim2.new(0.25, -7, 0, 132), CellPadding = UDim2.fromOffset(7, 8),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}, gridFrame)
 			for index, item in ipairs(items) do
@@ -186,11 +233,36 @@ function Library:CreateWindow(options)
 				card.BackgroundColor3 = C.card
 				stroke(card)
 				local thumb = make("Frame", {
-					Position = UDim2.fromOffset(9, 9), Size = UDim2.new(1, -18, 0, 101),
+					Position = UDim2.fromOffset(9, 9), Size = UDim2.new(1, -18, 0, 77),
 					BackgroundColor3 = Color3.fromRGB(39, 41, 48), BorderSizePixel = 0,
 				}, card)
 				corner(thumb, 5)
-				if item.Image then
+				local source = item.Model
+				local clone = source and (source:IsA("Model") or source:IsA("BasePart")) and source:Clone()
+				if clone then
+					local viewport = make("ViewportFrame", {
+						Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+						Ambient = Color3.fromRGB(170, 180, 190), LightDirection = Vector3.new(-1,-1,-1),
+					}, thumb)
+					local model = make("Model", {}, viewport)
+					for _, descendant in clone:GetDescendants() do
+						if descendant:IsA("BaseScript") then descendant:Destroy() end
+					end
+					clone.Parent = model
+					model:PivotTo(CFrame.identity)
+					local bounds, size = model:GetBoundingBox()
+					local camera = make("Camera", {FieldOfView = 35}, viewport)
+					viewport.CurrentCamera = camera
+					local function fit()
+						local pixels = viewport.AbsoluteSize
+						local aspect = math.min(1, pixels.X / math.max(1, pixels.Y))
+						local angle = math.atan(math.tan(math.rad(17.5)) * math.max(0.01, aspect))
+						local distance = math.max(0.2, size.Magnitude / (2 * math.sin(angle)))
+						camera.CFrame = CFrame.lookAt(bounds.Position + Vector3.new(1,0.65,-1).Unit * distance, bounds.Position)
+					end
+					viewport:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+					fit()
+				elseif item.Image then
 					make("ImageLabel", {
 						Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
 						Image = item.Image, ScaleType = Enum.ScaleType.Fit,
@@ -201,11 +273,11 @@ function Library:CreateWindow(options)
 					iconLabel.TextXAlignment = Enum.TextXAlignment.Center
 				end
 				local nameLabel = label(card, item.Name or "Item", 12, C.text, true)
-				nameLabel.Position = UDim2.fromOffset(9, 116)
+				nameLabel.Position = UDim2.fromOffset(9, 86)
 				nameLabel.Size = UDim2.new(1, -18, 0, 20)
 				nameLabel.TextXAlignment = Enum.TextXAlignment.Center
 				local price = label(card, "$" .. tostring(item.Price or 0), 12, C.green, true)
-				price.Position = UDim2.fromOffset(9, 139)
+				price.Position = UDim2.fromOffset(9, 107)
 				price.Size = UDim2.new(1, -18, 0, 18)
 				price.TextXAlignment = Enum.TextXAlignment.Center
 				card.MouseButton1Click:Connect(function() safeCall(onSelect, item) end)
@@ -249,10 +321,10 @@ function Library:CreateWindow(options)
 					fromInput(input)
 				end
 			end)
-			UserInputService.InputChanged:Connect(function(input)
+			listen(UserInputService.InputChanged, function(input)
 				if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then fromInput(input) end
 			end)
-			UserInputService.InputEnded:Connect(function(input)
+			listen(UserInputService.InputEnded, function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
 			end)
 			set(value)
@@ -264,9 +336,11 @@ function Library:CreateWindow(options)
 			row.Size = UDim2.new(1, 0, 0, 43)
 			stroke(row)
 			local left = label(row, text, 13, C.text)
+			left.Name = "Caption"
 			left.Position = UDim2.fromOffset(13, 0)
 			left.Size = UDim2.new(1, -140, 1, 0)
 			local right = label(row, rightText or "", 13, C.text, true)
+			right.Name = "Amount"
 			right.Position = UDim2.new(1, -130, 0, 0)
 			right.Size = UDim2.new(0, 116, 1, 0)
 			right.TextXAlignment = Enum.TextXAlignment.Right
@@ -298,6 +372,62 @@ function Library:CreateWindow(options)
 			return {Frame = row, Get = function() return enabled end, Set = set}
 		end
 
+		local function control(text)
+			local row = make("Frame", {Size = UDim2.new(1,0,0,43), BackgroundColor3 = C.card, BorderSizePixel = 0}, page)
+			corner(row,6)
+			local caption = label(row,text,14,C.text)
+			caption.Position = UDim2.fromOffset(12,0)
+			caption.Size = UDim2.new(0.5,-16,0,43)
+			return row
+		end
+		local function align(field)
+			field.Position = UDim2.new(0.5,0,0,5)
+			field.Size = UDim2.new(0.5,-6,0,33)
+		end
+		function tab:AddTextbox(text, initial, callback)
+			local row = control(text)
+			local box = make("TextBox", {Text = initial or "", PlaceholderText = "Digite aqui", ClearTextOnFocus = false,
+				TextSize = 14, Font = Enum.Font.Gotham, TextColor3 = C.text, BackgroundColor3 = C.field, ClipsDescendants = true}, row)
+			align(box)
+			corner(box,5)
+			box.FocusLost:Connect(function() safeCall(callback,box.Text) end)
+			return box
+		end
+		function tab:AddKeybind(text, key, callback)
+			local field = button(control(text), key.Name)
+			align(field)
+			local binding = {key = key, callback = callback, display = field}
+			table.insert(bindings,binding)
+			field.Activated:Connect(function()
+				if capturing then capturing.display.Text = capturing.key.Name end
+				capturing = binding
+				field.Text = "Pressione uma tecla"
+			end)
+			return field
+		end
+		function tab:AddDropdown(text, choices, initial, callback)
+			local row = control(text)
+			local field = button(row, initial or choices[1] or "Selecionar")
+			align(field)
+			local list = make("Frame", {Position = UDim2.fromOffset(6,43), Size = UDim2.new(1,-12,0,#choices*34), BackgroundTransparency = 1, Visible = false},row)
+			make("UIListLayout",{SortOrder = Enum.SortOrder.LayoutOrder},list)
+			local function expand(open)
+				list.Visible = open
+				row.Size = UDim2.new(1,0,0,43 + (open and #choices*34 or 0))
+			end
+			field.Activated:Connect(function() expand(not list.Visible) end)
+			for i, choice in ipairs(choices) do
+				local option = button(list,choice)
+				option.LayoutOrder = i
+				option.Size = UDim2.new(1,0,0,34)
+				option.Activated:Connect(function()
+					field.Text = choice
+					expand(false)
+					safeCall(callback,choice)
+				end)
+			end
+			return field
+		end
 		return tab
 	end
 
