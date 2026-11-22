@@ -121,9 +121,17 @@ local player = Players.LocalPlayer
 		local y = math.clamp(center.Y, half.Y, math.max(half.Y, screen.Y - half.Y))
 		root.Position = UDim2.fromOffset(x, y)
 	end
+	local progress = make("NumberValue", {Value = 0}, gui)
+	local fitScale = 1
+	local function renderTransition()
+		scale.Scale = fitScale * (0.83 + 0.17 * progress.Value)
+		root.GroupTransparency = 1 - progress.Value
+	end
+	progress.Changed:Connect(renderTransition)
 	local function resize()
 		local view = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-		scale.Scale = math.max(0.01, math.min(options.Scale or 0.8, (view.X - 24) / 620, (view.Y - 24) / 636))
+		fitScale = math.max(0.01, math.min(options.Scale or 0.8, (view.X - 24) / 620, (view.Y - 24) / 636))
+		renderTransition()
 		if root.Position.X.Scale == 0 then place(Vector2.new(root.Position.X.Offset, root.Position.Y.Offset)) end
 	end
 	resize()
@@ -164,7 +172,7 @@ local player = Players.LocalPlayer
 	subtitle.Size = UDim2.new(1, -140, 0, 18)
 	local currentTitle = label(header, "", 13, C.blue, true)
 	currentTitle.TextXAlignment = Enum.TextXAlignment.Right
-	currentTitle.Position = UDim2.new(1, -120, 0, 24)
+	currentTitle.Position = UDim2.new(1, -175, 0, 24)
 	currentTitle.Size = UDim2.fromOffset(103, 22)
 
 	header.Active = true
@@ -204,20 +212,41 @@ local player = Players.LocalPlayer
 	}, root)
 
 	local window = {Gui = gui, Root = root, _selected = nil}
+	local close = button(header, "×", 25)
+	close.Name = "Fechar"
+	close.Size = UDim2.fromOffset(44,44)
+	close.Position = UDim2.new(1,-56,0,16)
+	local reopen = button(gui, "Abrir painel", 15)
+	reopen.Name = "Reabrir"
+	reopen.Size = UDim2.fromOffset(116,44)
+	reopen.Position = UDim2.new(1,-132,0.5,-22)
+	reopen.Visible = false
 	local transition
-	root.GroupTransparency = 1
 	function window:SetTheme(name) applyTheme(name) end
 	function window:SetVisible(visible)
+		if self.Visible == visible then return end
 		self.Visible = visible
+		pointer = nil
+		if capturing then
+			capturing.display.Text = capturing.key.Name
+			capturing = nil
+		end
 		if transition then transition:Cancel() end
-		gui.Enabled = true
-		transition = TweenService:Create(root, TweenInfo.new(0.2, Enum.EasingStyle.Quad),
-			{GroupTransparency = visible and 0 or 1})
-		transition.Completed:Once(function(state)
-			if state == Enum.PlaybackState.Completed and not self.Visible then gui.Enabled = false end
+		root.Visible = true
+		reopen.Visible = not visible
+		local tween = TweenService:Create(progress,
+			TweenInfo.new(0.32, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{Value = visible and 1 or 0})
+		transition = tween
+		tween.Completed:Once(function(state)
+			if transition ~= tween or state ~= Enum.PlaybackState.Completed then return end
+			root.Visible = visible
+			transition = nil
 		end)
-		transition:Play()
+		tween:Play()
 	end
+	close.Activated:Connect(function() window:SetVisible(false) end)
+	reopen.Activated:Connect(function() window:SetVisible(true) end)
 	window:SetVisible(true)
 	function window:Destroy() gui:Destroy() end
 
