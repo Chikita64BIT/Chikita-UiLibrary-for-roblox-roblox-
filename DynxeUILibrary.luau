@@ -124,7 +124,7 @@ local player = Players.LocalPlayer
 	local progress = make("NumberValue", {Value = 0}, gui)
 	local fitScale = 1
 	local function renderTransition()
-		scale.Scale = fitScale * (0.83 + 0.17 * progress.Value)
+		scale.Scale = fitScale * (0.76 + 0.24 * progress.Value)
 		root.GroupTransparency = 1 - progress.Value
 	end
 	progress.Changed:Connect(renderTransition)
@@ -243,7 +243,7 @@ local player = Players.LocalPlayer
 		root.Visible = true
 		reopen.Visible = not visible
 		local tween = TweenService:Create(progress,
-			TweenInfo.new(0.32, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			TweenInfo.new(visible and 0.46 or 0.23, Enum.EasingStyle.Quart, visible and Enum.EasingDirection.Out or Enum.EasingDirection.In),
 			{Value = visible and 1 or 0})
 		transition = tween
 		tween.Completed:Once(function(state)
@@ -256,10 +256,17 @@ local player = Players.LocalPlayer
 	end
 	close.Activated:Connect(function() window:SetVisible(false) end)
 	reopen.Activated:Connect(function() window:SetVisible(true) end)
-	window:SetVisible(true)
+	-- Inicie a entrada depois que o exemplo construir as abas e os controles.
+	game:GetService("RunService").PreRender:Once(function()
+		if gui.Parent and window.Visible == nil then window:SetVisible(true) end
+	end)
 	function window:Destroy() gui:Destroy() end
 
+	local tabCount = 0
+	local pageTransition
 	function window:CreateTab(name, icon)
+		tabCount += 1
+		local index = tabCount
 		local nav = button(rail, icon or "□", 25)
 		nav.Name = name .. "TabButton"
 		nav.Size = UDim2.fromOffset(43, 43)
@@ -278,19 +285,29 @@ local player = Players.LocalPlayer
 		make("UIListLayout", {Padding = UDim.new(0, 16), SortOrder = Enum.SortOrder.LayoutOrder}, page)
 		local tab = {Page = page}
 		local function selectTab()
-			if window._selected then
+			local previous = window._selected
+			if previous and previous.page == page then return end
+			if pageTransition then pageTransition:Cancel() end
+			if previous then
 				window._selected.page.Visible = false
 				paint(window._selected.nav, "TextColor3", "text")
 				animate(window._selected.nav, {BackgroundTransparency = 1})
+			end
+			page.Position = UDim2.fromOffset(0, 0)
+			if previous then
+				local direction = index > previous.index and 1 or -1
+				page.Position = UDim2.fromOffset(48 * direction, 0)
+				pageTransition = TweenService:Create(page, TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.fromOffset(0, 0)})
+				pageTransition:Play()
 			end
 			page.Visible = true
 			currentTitle.Text = string.upper(name)
 			paint(nav, "TextColor3", "blue")
 			paint(nav, "BackgroundColor3", "card")
 			animate(nav, {BackgroundTransparency = 0})
-			window._selected = {page = page, nav = nav}
+			window._selected = {page = page, nav = nav, index = index}
 		end
-		nav.MouseButton1Click:Connect(selectTab)
+		nav.Activated:Connect(selectTab)
 		if not window._selected then selectTab() end
 		function tab:Select() selectTab() end
 
@@ -451,7 +468,7 @@ local player = Players.LocalPlayer
 			end
 			paint(pill, "BackgroundColor3", enabled and "blue" or "line")
 			dot.Position = UDim2.fromOffset(enabled and 27 or 3, 3)
-			row.MouseButton1Click:Connect(function() set(not enabled) end)
+			row.Activated:Connect(function() set(not enabled) end)
 			return {Frame = row, Get = function() return enabled end, Set = set}
 		end
 
