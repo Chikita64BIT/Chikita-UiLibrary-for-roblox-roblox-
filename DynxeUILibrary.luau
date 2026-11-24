@@ -25,19 +25,149 @@ local themes = {
 	Menta = base,
 	Oceano = {background = Color3.fromHex("101927"), sidebar = Color3.fromHex("0C1420"), panel = Color3.fromHex("1C2B40"), card = Color3.fromHex("21334A"), field = Color3.fromHex("152236"), line = Color3.fromHex("384F68"), blue = Color3.fromHex("79BCFF")},
 	Ametista = {background = Color3.fromHex("201A29"), sidebar = Color3.fromHex("16121D"), panel = Color3.fromHex("30263D"), card = Color3.fromHex("392E45"), field = Color3.fromHex("261E30"), line = Color3.fromHex("53425F"), blue = Color3.fromHex("D1A1FF")},
+	Aurora = {background = Color3.fromHex("111D23"), sidebar = Color3.fromHex("0C161C"), panel = Color3.fromHex("1B3039"), card = Color3.fromHex("23414A"), field = Color3.fromHex("172B31"), line = Color3.fromHex("3C5963"), blue = Color3.fromHex("8BE9CF")},
+	Solar = {background = Color3.fromHex("231D18"), sidebar = Color3.fromHex("1B1612"), panel = Color3.fromHex("33291F"), card = Color3.fromHex("3D3227"), field = Color3.fromHex("30241C"), line = Color3.fromHex("5D4936"), blue = Color3.fromHex("FFBC75")},
+	Rubi = {background = Color3.fromHex("23171E"), sidebar = Color3.fromHex("191016"), panel = Color3.fromHex("33222C"), card = Color3.fromHex("412B37"), field = Color3.fromHex("291B23"), line = Color3.fromHex("624054"), blue = Color3.fromHex("FF90AF")},
+	Grafite = {background = Color3.fromHex("191A1C"), sidebar = Color3.fromHex("111214"), panel = Color3.fromHex("252629"), card = Color3.fromHex("303135"), field = Color3.fromHex("202124"), line = Color3.fromHex("484A50"), blue = Color3.fromHex("CCD0DE")},
 }
+local translations = {
+	pt = {
+		search = "Buscar",
+		query = "Buscar abas...",
+		empty = "Nenhuma aba encontrada",
+		anonymous = "Anônimo",
+		show = "Mostrar perfil",
+		hide = "Ocultar perfil",
+		reopen = "Abrir painel",
+		input = "Digite aqui",
+		select = "Selecionar",
+		press = "Pressione uma tecla",
+		notice = "Notificação",
+		settings = "Preferências",
+		theme = "Tema",
+		language = "Idioma",
+		save = "Salvar preferências",
+		load = "Carregar preferências",
+		saved = "Preferências salvas",
+		loaded = "Preferências carregadas",
+		missing = "Ainda não há preferências salvas",
+		busy = "Tente novamente em instantes",
+		unavailable = "SaveManager indisponível",
+		subtitle = "A balsa partiu",
+	},
+	en = {
+		search = "Search",
+		query = "Search tabs...",
+		empty = "No tabs found",
+		anonymous = "Anonymous",
+		show = "Show profile",
+		hide = "Hide profile",
+		reopen = "Open panel",
+		input = "Type here",
+		select = "Select",
+		press = "Press a key",
+		notice = "Notification",
+		settings = "Settings",
+		theme = "Theme",
+		language = "Language",
+		save = "Save preferences",
+		load = "Load preferences",
+		saved = "Preferences saved",
+		loaded = "Preferences loaded",
+		missing = "No saved preferences yet",
+		busy = "Try again shortly",
+		unavailable = "SaveManager unavailable",
+		subtitle = "Ferry has departed",
+	},
+	es = {
+		search = "Buscar",
+		query = "Buscar pestañas...",
+		empty = "No se encontraron pestañas",
+		anonymous = "Anónimo",
+		show = "Mostrar perfil",
+		hide = "Ocultar perfil",
+		reopen = "Abrir panel",
+		input = "Escribe aquí",
+		select = "Seleccionar",
+		press = "Pulsa una tecla",
+		notice = "Notificación",
+		settings = "Preferencias",
+		theme = "Tema",
+		language = "Idioma",
+		save = "Guardar preferencias",
+		load = "Cargar preferencias",
+		saved = "Preferencias guardadas",
+		loaded = "Preferencias cargadas",
+		missing = "Todavía no hay preferencias guardadas",
+		busy = "Inténtalo de nuevo en un momento",
+		unavailable = "SaveManager no disponible",
+		subtitle = "El ferry ha salido",
+	},
+}
+local keyCodes = {}
+for _, key in Enum.KeyCode:GetEnumItems() do keyCodes[key.Name] = key end
+local remoteName = "DynxePreferencesV1"
+
+-- Script em ServerScriptService: require(game.ReplicatedStorage.DynxeUILibrary):StartSaveManager()
+function Library:StartSaveManager()
+	assert(game:GetService("RunService"):IsServer(), "StartSaveManager requer um Script no servidor")
+	local storage = game:GetService("ReplicatedStorage")
+	if storage:FindFirstChild(remoteName) then return end
+	local store = game:GetService("DataStoreService"):GetDataStore(remoteName)
+	local last = setmetatable({}, {__mode = "k"})
+	local active = setmetatable({}, {__mode = "k"})
+	local remote = Instance.new("RemoteFunction")
+	remote.Name = remoteName
+	remote.OnServerInvoke = function(player, action, data)
+		if action ~= "save" and action ~= "load" then return false, "unavailable" end
+		if active[player] or os.clock() - (last[player] or -math.huge) < 2 then return false, "busy" end
+		last[player] = os.clock()
+		local key = "player_" .. player.UserId
+		local prefs
+		if action == "save" then
+			if type(data) ~= "table" or not themes[data.theme] or not translations[data.language]
+				or type(data.anonymous) ~= "boolean" or type(data.key) ~= "string" or #data.key > 40
+				or not keyCodes[data.key] then return false, "unavailable" end
+			prefs = {theme = data.theme, language = data.language, anonymous = data.anonymous, key = data.key}
+		end
+		active[player] = true
+		local ok, result = pcall(function()
+			if prefs then
+				store:UpdateAsync(key, function() return prefs end)
+				return true
+			end
+			return store:GetAsync(key)
+		end)
+		active[player] = nil
+		if not ok then return false, "unavailable" end
+		if result == nil then return false, "missing" end
+		return true, result
+	end
+	remote.Parent = storage
+end
+
 function Library:CreateWindow(options)
 	options = options or {}
+	local language = options.Language or "pt"
+	assert(translations[language], "Idioma desconhecido: " .. tostring(language))
+	local theme = options.Theme or "Menta"
+	local strings = setmetatable({}, {__mode = "k"})
+	local function translate(key) return translations[language][key] end
+	local function bindText(object, property, key)
+		strings[object] = {property, key}
+		object[property] = translate(key)
+	end
 	local C = table.clone(base)
 	local bindingsByObject = setmetatable({}, {__mode = "k"})
 	local function applyTheme(name)
 		assert(themes[name], "Tema desconhecido: " .. tostring(name))
+		theme = name
 		for key, fallback in base do C[key] = themes[name][key] or fallback end
 		for object, properties in bindingsByObject do
 			for property, role in properties do object[property] = C[role] end
 		end
 	end
-	applyTheme(options.Theme or "Menta")
+	applyTheme(theme)
 	local function paint(object, property, role)
 		local properties = bindingsByObject[object] or {}
 		bindingsByObject[object] = properties
@@ -84,8 +214,16 @@ local function button(parent, text, size)
 	return b
 end
 
-local function animate(object, properties)
-	TweenService:Create(object, TweenInfo.new(0.16, Enum.EasingStyle.Quad), properties):Play()
+local activeTweens = setmetatable({}, {__mode = "k"})
+local function animate(object, properties, duration, style)
+	local previous = activeTweens[object]
+	if previous then previous:Cancel() end
+	local tween = TweenService:Create(object, TweenInfo.new(duration or 0.18, style or Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), properties)
+	activeTweens[object] = tween
+	tween.Completed:Once(function()
+		if activeTweens[object] == tween then activeTweens[object] = nil end
+	end)
+	tween:Play()
 end
 
 local function safeCall(callback, ...)
@@ -124,7 +262,7 @@ local player = Players.LocalPlayer
 	local progress = make("NumberValue", {Value = 0}, gui)
 	local fitScale = 1
 	local function renderTransition()
-		scale.Scale = fitScale * (0.76 + 0.24 * progress.Value)
+		scale.Scale = fitScale * (0.94 + 0.06 * progress.Value)
 		root.GroupTransparency = 1 - progress.Value
 	end
 	progress.Changed:Connect(renderTransition)
@@ -184,6 +322,7 @@ local player = Players.LocalPlayer
 	title.Position = UDim2.fromOffset(23, 16)
 	title.Size = UDim2.new(1, -240, 0, 25)
 	local subtitle = label(header, options.Subtitle or "Ferry has Departed", 11, C.muted)
+	if not options.Subtitle then bindText(subtitle, "Text", "subtitle") end
 	subtitle.Position = UDim2.fromOffset(23, 42)
 	subtitle.Size = UDim2.new(1, -356, 0, 18)
 	local currentTitle = label(header, "", 13, C.blue, true)
@@ -230,8 +369,8 @@ local player = Players.LocalPlayer
 	local anonymous
 	function window:SetAnonymous(enabled)
 		anonymous = enabled == true
-		display.Text = anonymous and "Anônimo" or player.DisplayName
-		hint.Text = anonymous and "Mostrar perfil" or "Ocultar perfil"
+		display.Text = anonymous and translate("anonymous") or player.DisplayName
+		hint.Text = translate(anonymous and "show" or "hide")
 		avatar.Image = anonymous and "" or ("rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150")
 		avatar.Visible = not anonymous
 		mask.Visible = anonymous
@@ -289,7 +428,7 @@ local player = Players.LocalPlayer
 		card.Size = UDim2.new(1, 0, 0, 72)
 		paint(card, "BackgroundColor3", "card")
 		stroke(card)
-		local heading = label(card, tostring(titleText or "Notificação"), 14, C.blue, true)
+		local heading = label(card, tostring(titleText or translate("notice")), 14, C.blue, true)
 		heading.Position = UDim2.fromOffset(12, 6)
 		heading.Size = UDim2.new(1, -24, 0, 20)
 		local body = label(card, tostring(message or ""), 13, C.text)
@@ -304,12 +443,17 @@ local player = Players.LocalPlayer
 		return card
 	end
 	local reopen = button(launcher, "Abrir painel", 15)
+	bindText(reopen, "Text", "reopen")
 	reopen.Name = "Reabrir"
 	reopen.Size = UDim2.fromOffset(116,44)
 	reopen.Position = UDim2.new(1,-132,0.5,-22)
 	reopen.Visible = false
 	local transition
-	function window:SetTheme(name) applyTheme(name) end
+	local refreshSettings
+	function window:SetTheme(name)
+		applyTheme(name)
+		if refreshSettings then refreshSettings() end
+	end
 	function window:SetVisible(visible)
 		if self.Visible == visible then return end
 		self.Visible = visible
@@ -322,9 +466,12 @@ local player = Players.LocalPlayer
 		if transition then transition:Cancel() end
 		root.Visible = true
 		reopen.Visible = not visible
+		local target = visible and 1 or 0
+		local remaining = math.abs(target - progress.Value)
+		local duration = math.max(0.05, remaining * (visible and 0.30 or 0.18))
 		local tween = TweenService:Create(progress,
-			TweenInfo.new(visible and 0.46 or 0.23, Enum.EasingStyle.Quart, visible and Enum.EasingDirection.Out or Enum.EasingDirection.In),
-			{Value = visible and 1 or 0})
+			TweenInfo.new(duration, visible and Enum.EasingStyle.Quint or Enum.EasingStyle.Sine,
+				visible and Enum.EasingDirection.Out or Enum.EasingDirection.In), {Value = target})
 		transition = tween
 		tween.Completed:Once(function(state)
 			if transition ~= tween or state ~= Enum.PlaybackState.Completed then return end
@@ -343,11 +490,12 @@ local player = Players.LocalPlayer
 	function window:Destroy() gui:Destroy() end
 
 	local tabCount = 0
-	local pageTransition
 	local registerSearchResult
+	local builtInKey
 	function window:CreateTab(name, icon)
 		tabCount += 1
 		local index = tabCount
+		local titleKey = builtInKey
 		local source = tostring(icon or "")
 		local image
 		if source:match("^%d+$") then
@@ -383,7 +531,6 @@ local player = Players.LocalPlayer
 		local function selectTab()
 			local previous = window._selected
 			if previous and previous.page == page then return end
-			if pageTransition then pageTransition:Cancel() end
 			if previous then
 				window._selected.page.Visible = false
 				paint(window._selected.nav, "TextColor3", "text")
@@ -392,16 +539,15 @@ local player = Players.LocalPlayer
 			page.Position = UDim2.fromOffset(0, 0)
 			if previous then
 				local direction = index > previous.index and 1 or -1
-				page.Position = UDim2.fromOffset(48 * direction, 0)
-				pageTransition = TweenService:Create(page, TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.fromOffset(0, 0)})
-				pageTransition:Play()
+				page.Position = UDim2.fromOffset(22 * direction, 0)
+				animate(page, {Position = UDim2.fromOffset(0, 0)}, 0.22, Enum.EasingStyle.Quint)
 			end
 			page.Visible = true
-			currentTitle.Text = string.upper(name)
+			currentTitle.Text = string.upper(titleKey and translate(titleKey) or name)
 			paint(nav, "TextColor3", "blue")
 			paint(nav, "BackgroundColor3", "card")
 			animate(nav, {BackgroundTransparency = 0})
-			window._selected = {page = page, nav = nav, index = index}
+			window._selected = {page = page, nav = nav, index = index, titleKey = titleKey}
 		end
 		nav.Activated:Connect(selectTab)
 		if not window._selected then selectTab() end
@@ -540,7 +686,7 @@ local player = Players.LocalPlayer
 			right.Position = UDim2.new(1, -130, 0, 0)
 			right.Size = UDim2.new(0, 116, 1, 0)
 			right.TextXAlignment = Enum.TextXAlignment.Right
-			row.MouseButton1Click:Connect(function() safeCall(callback) end)
+			row.Activated:Connect(function() safeCall(callback) end)
 			return row
 		end
 
@@ -559,7 +705,7 @@ local player = Players.LocalPlayer
 			local function set(state)
 				enabled = state == true
 				paint(pill, "BackgroundColor3", enabled and "blue" or "line")
-				animate(dot, {Position = UDim2.fromOffset(enabled and 27 or 3, 3)})
+				animate(dot, {Position = UDim2.fromOffset(enabled and 27 or 3, 3)}, 0.21, Enum.EasingStyle.Back)
 				safeCall(callback, enabled)
 			end
 			paint(pill, "BackgroundColor3", enabled and "blue" or "line")
@@ -584,6 +730,7 @@ local player = Players.LocalPlayer
 			local row = control(text)
 			local box = make("TextBox", {Text = initial or "", PlaceholderText = "Digite aqui", ClearTextOnFocus = false,
 				TextSize = 14, Font = Enum.Font.Gotham, TextColor3 = C.text, BackgroundColor3 = C.field, ClipsDescendants = true}, row)
+			bindText(box, "PlaceholderText", "input")
 			align(box)
 			corner(box,5)
 			box.FocusLost:Connect(function() safeCall(callback,box.Text) end)
@@ -596,7 +743,7 @@ local player = Players.LocalPlayer
 			field.Activated:Connect(function()
 				if capturing then capturing.display.Text = capturing.key.Name end
 				capturing = binding
-				field.Text = "Pressione uma tecla"
+				field.Text = translate("press")
 			end)
 			return field
 		end
@@ -611,6 +758,7 @@ local player = Players.LocalPlayer
 		function tab:AddDropdown(text, choices, initial, callback)
 			local row = control(text)
 			local field = button(row, initial or choices[1] or "Selecionar")
+			if not initial and not choices[1] then bindText(field, "Text", "select") end
 			align(field)
 			local list = make("Frame", {Position = UDim2.fromOffset(10,49), Size = UDim2.new(1,-20,0,#choices*42), BackgroundTransparency = 1, Visible = true},row)
 			row.ClipsDescendants = true
@@ -618,7 +766,7 @@ local player = Players.LocalPlayer
 			make("UIListLayout",{Padding = UDim.new(0,8), SortOrder = Enum.SortOrder.LayoutOrder},list)
 			local function expand(open)
 				expanded = open
-				animate(row, {Size = UDim2.new(1,0,0,open and (51 + #choices*42) or 43)})
+				animate(row, {Size = UDim2.new(1,0,0,open and (51 + #choices*42) or 43)}, open and 0.24 or 0.15)
 			end
 			field.Activated:Connect(function() expand(not expanded) end)
 			for i, choice in ipairs(choices) do
@@ -633,41 +781,114 @@ local player = Players.LocalPlayer
 			end
 			return field
 		end
-		if registerSearchResult then registerSearchResult(name, tab) end
+		if registerSearchResult then registerSearchResult(name, tab, titleKey) end
 		return tab
 	end
 
+	builtInKey = "search"
 	local search = window:CreateTab("Search", "⌕")
 	local query = make("TextBox", {Name = "Busca", Text = "", PlaceholderText = "Buscar abas...",
 		ClearTextOnFocus = false, BackgroundColor3 = C.field, TextColor3 = C.text,
 		PlaceholderColor3 = C.muted, Font = Enum.Font.Gotham, TextSize = 15,
 		Size = UDim2.new(1, 0, 0, 42), LayoutOrder = -2}, search.Page)
+	bindText(query, "PlaceholderText", "query")
 	corner(query, 6)
 	local empty = label(search.Page, "Nenhuma aba encontrada", 13, C.muted)
+	bindText(empty, "Text", "empty")
 	empty.Size = UDim2.new(1, 0, 0, 30)
 	local results = {}
 	local function filterResults()
 		local term = string.lower(query.Text)
 		local found = false
 		for _, result in results do
-			result.button.Visible = string.find(result.name, term, 1, true) ~= nil
+			result.button.Visible = string.find(string.lower(result.button.Text), term, 1, true) ~= nil
 			found = found or result.button.Visible
 		end
 		empty.Visible = not found
 		search.Page.CanvasPosition = Vector2.zero
 	end
 	query:GetPropertyChangedSignal("Text"):Connect(filterResults)
-	registerSearchResult = function(name, tab)
+	local firstUserTab = true
+	registerSearchResult = function(name, tab, titleKey)
 		local result = button(search.Page, name, 14)
+		if titleKey then bindText(result, "Text", titleKey) end
 		result.LayoutOrder = #results + 1
 		result.Size = UDim2.new(1, 0, 0, 40)
 		result.Activated:Connect(function()
 			query:ReleaseFocus()
 			tab:Select()
 		end)
-		table.insert(results, {name = string.lower(name), button = result})
+		table.insert(results, {button = result})
 		filterResults()
-		if #results == 1 then tab:Select() end
+		if firstUserTab and not titleKey then
+			firstUserTab = false
+			tab:Select()
+		end
+	end
+
+	builtInKey = "settings"
+	local settings = window:CreateTab("Settings", "⚙")
+	builtInKey = nil
+	local themeNames = {"Menta", "Oceano", "Ametista", "Aurora", "Solar", "Rubi", "Grafite"}
+	local languages = {"pt", "en", "es"}
+	local languageNames = {pt = "Português", en = "English", es = "Español"}
+	local function cycle(list, current)
+		return list[(table.find(list, current) or 0) % #list + 1]
+	end
+	local themeRow = settings:AddButton("", "", function() window:SetTheme(cycle(themeNames, theme)) end)
+	local langRow = settings:AddButton("", "", function() window:SetLanguage(cycle(languages, language)) end)
+	refreshSettings = function()
+		themeRow.Amount.Text = theme
+		langRow.Amount.Text = languageNames[language]
+	end
+	bindText(themeRow.Caption, "Text", "theme")
+	bindText(langRow.Caption, "Text", "language")
+	refreshSettings()
+	function window:SetLanguage(code)
+		assert(translations[code], "Idioma desconhecido: " .. tostring(code))
+		language = code
+		for object, binding in strings do object[binding[1]] = translate(binding[2]) end
+		self:SetAnonymous(anonymous)
+		if capturing then capturing.display.Text = translate("press") end
+		local selected = self._selected
+		if selected and selected.titleKey then currentTitle.Text = string.upper(translate(selected.titleKey)) end
+		refreshSettings()
+		filterResults()
+	end
+	local function request(action, prefs)
+		local remote = game:GetService("ReplicatedStorage"):FindFirstChild(remoteName)
+		if not remote or not remote:IsA("RemoteFunction") then return false, "unavailable" end
+		local sent, ok, result = pcall(remote.InvokeServer, remote, action, prefs)
+		if not sent then return false, "unavailable" end
+		return ok, result
+	end
+	local manager = {}
+	window.SaveManager = manager
+	function manager:Save()
+		return request("save", {theme = theme, language = language, anonymous = anonymous, key = toggleBinding.key.Name})
+	end
+	function manager:Load()
+		local ok, prefs = request("load")
+		if not ok then return false, prefs end
+		if type(prefs) ~= "table" or not themes[prefs.theme] or not translations[prefs.language]
+			or type(prefs.anonymous) ~= "boolean" or not keyCodes[prefs.key] then return false, "unavailable" end
+		if not gui.Parent then return false, "unavailable" end
+		window:SetTheme(prefs.theme)
+		window:SetAnonymous(prefs.anonymous)
+		toggleBinding.key = keyCodes[prefs.key]
+		if toggleBinding.display then toggleBinding.display.Text = toggleBinding.key.Name end
+		window:SetLanguage(prefs.language)
+		return true
+	end
+	for _, action in {"save", "load"} do
+		local row = settings:AddButton("", "", function()
+			local ok, reason
+			if action == "save" then ok, reason = manager:Save() else ok, reason = manager:Load() end
+			if gui.Parent then
+				window:Notify(translate("settings"), translate(ok and (action == "save" and "saved" or "loaded") or reason))
+			end
+		end)
+		bindText(row.Caption, "Text", action)
 	end
 
 	return window
