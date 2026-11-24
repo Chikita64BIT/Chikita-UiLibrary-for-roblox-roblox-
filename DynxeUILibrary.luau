@@ -154,11 +154,16 @@ local player = Players.LocalPlayer
 		Size = UDim2.new(0, 65, 1, 0), BackgroundColor3 = C.sidebar,
 		BorderSizePixel = 0,
 	}, root)
-	local rail = make("Frame", {
+	local rail = make("ScrollingFrame", {
 		Position = UDim2.fromOffset(0, 15), Size = UDim2.new(1, 0, 1, -30),
-		BackgroundTransparency = 1,
+		BackgroundTransparency = 1, BorderSizePixel = 0,
+		ScrollingDirection = Enum.ScrollingDirection.Y, AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.fromOffset(0, 0), ScrollBarThickness = 3, ScrollBarImageColor3 = C.blue,
 	}, side)
-	make("UIListLayout", {Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center}, rail)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, rail)
 
 	local header = make("Frame", {
 		Position = UDim2.fromOffset(65, 0), Size = UDim2.new(1, -65, 0, 77),
@@ -283,6 +288,7 @@ local player = Players.LocalPlayer
 			}, nav)
 		end
 		nav.Name = name .. "TabButton"
+		nav.LayoutOrder = index
 		nav.Size = UDim2.fromOffset(43, 43)
 		nav.BackgroundTransparency = 1
 		local page = make("ScrollingFrame", {
