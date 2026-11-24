@@ -154,8 +154,19 @@ local player = Players.LocalPlayer
 		Size = UDim2.new(0, 65, 1, 0), BackgroundColor3 = C.sidebar,
 		BorderSizePixel = 0,
 	}, root)
+	local brand = label(side, "◈", 30, C.blue, true)
+	brand.Name = "Logo"
+	brand.Position = UDim2.fromOffset(0, 6)
+	brand.Size = UDim2.new(1, 0, 0, 46)
+	brand.TextXAlignment = Enum.TextXAlignment.Center
+	if options.LogoImage then
+		brand.Text = ""
+		make("ImageLabel", {Name = "Imagem", Image = options.LogoImage, BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(36, 36), ScaleType = Enum.ScaleType.Fit}, brand)
+	end
 	local rail = make("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 15), Size = UDim2.new(1, 0, 1, -30),
+		Position = UDim2.fromOffset(0, 59), Size = UDim2.new(1, 0, 1, -74),
 		BackgroundTransparency = 1, BorderSizePixel = 0,
 		ScrollingDirection = Enum.ScrollingDirection.Y, AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.fromOffset(0, 0), ScrollBarThickness = 3, ScrollBarImageColor3 = C.blue,
@@ -171,13 +182,13 @@ local player = Players.LocalPlayer
 	}, root)
 	local title = label(header, options.Title or "Dynxe LT2", 19, C.text, true)
 	title.Position = UDim2.fromOffset(23, 16)
-	title.Size = UDim2.new(1, -130, 0, 25)
+	title.Size = UDim2.new(1, -240, 0, 25)
 	local subtitle = label(header, options.Subtitle or "Ferry has Departed", 11, C.muted)
 	subtitle.Position = UDim2.fromOffset(23, 42)
-	subtitle.Size = UDim2.new(1, -140, 0, 18)
+	subtitle.Size = UDim2.new(1, -356, 0, 18)
 	local currentTitle = label(header, "", 13, C.blue, true)
 	currentTitle.TextXAlignment = Enum.TextXAlignment.Right
-	currentTitle.Position = UDim2.new(1, -175, 0, 24)
+	currentTitle.Position = UDim2.new(1, -326, 0, 40)
 	currentTitle.Size = UDim2.fromOffset(103, 22)
 
 	local dragArea = make("Frame", {Name = "Arrastar", Active = true, BackgroundTransparency = 1, Size = UDim2.new(1,-62,1,0), ZIndex = 2}, header)
@@ -198,6 +209,35 @@ local player = Players.LocalPlayer
 	end)
 
 	local window = {Gui = gui, Root = root, _selected = nil}
+	local profile = button(header, "", 14)
+	profile.Name = "Perfil"
+	profile.ZIndex = 3
+	profile.Position = UDim2.new(1, -214, 0, 16)
+	profile.Size = UDim2.fromOffset(148, 44)
+	local avatar = make("ImageLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6),
+		Size = UDim2.fromOffset(32, 32), ScaleType = Enum.ScaleType.Crop}, profile)
+	corner(avatar, 16)
+	local mask = label(profile, "●", 23, C.muted, true)
+	mask.Position = avatar.Position
+	mask.Size = avatar.Size
+	mask.TextXAlignment = Enum.TextXAlignment.Center
+	local display = label(profile, "", 13, C.text, true)
+	display.Position = UDim2.fromOffset(44, 4)
+	display.Size = UDim2.new(1, -48, 0, 20)
+	local hint = label(profile, "", 10, C.muted)
+	hint.Position = UDim2.fromOffset(44, 23)
+	hint.Size = UDim2.new(1, -48, 0, 16)
+	local anonymous
+	function window:SetAnonymous(enabled)
+		anonymous = enabled == true
+		display.Text = anonymous and "Anônimo" or player.DisplayName
+		hint.Text = anonymous and "Mostrar perfil" or "Ocultar perfil"
+		avatar.Image = anonymous and "" or ("rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150")
+		avatar.Visible = not anonymous
+		mask.Visible = anonymous
+	end
+	window:SetAnonymous(options.Anonymous)
+	profile.Activated:Connect(function() window:SetAnonymous(not anonymous) end)
 	local toggleBinding = {key = options.ToggleKey or Enum.KeyCode.RightShift}
 	local bindings = {}
 	local capturing
@@ -228,6 +268,41 @@ local player = Players.LocalPlayer
 	close.Position = UDim2.new(1,-56,0,16)
 	local launcher = make("ScreenGui", {Name = gui.Name .. "Launcher", ResetOnSpawn = false, DisplayOrder = gui.DisplayOrder + 1}, gui.Parent)
 	gui.Destroying:Connect(function() launcher:Destroy() end)
+	local notices = make("Frame", {Name = "Notificacoes", BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -12),
+		Size = UDim2.new(1, -24, 0, 0), AutomaticSize = Enum.AutomaticSize.Y}, launcher)
+	make("UISizeConstraint", {MaxSize = Vector2.new(288, 10000)}, notices)
+	make("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, notices)
+	local sequence = 0
+	function window:Notify(titleText, message, duration)
+		local cards = {}
+		for _, child in notices:GetChildren() do
+			if child:IsA("TextButton") then table.insert(cards, child) end
+		end
+		if #cards >= 3 then
+			table.sort(cards, function(a, b) return a.LayoutOrder < b.LayoutOrder end)
+			cards[1]:Destroy()
+		end
+		sequence += 1
+		local card = button(notices, "", 14)
+		card.LayoutOrder = sequence
+		card.Size = UDim2.new(1, 0, 0, 72)
+		paint(card, "BackgroundColor3", "card")
+		stroke(card)
+		local heading = label(card, tostring(titleText or "Notificação"), 14, C.blue, true)
+		heading.Position = UDim2.fromOffset(12, 6)
+		heading.Size = UDim2.new(1, -24, 0, 20)
+		local body = label(card, tostring(message or ""), 13, C.text)
+		body.Position = UDim2.fromOffset(12, 27)
+		body.Size = UDim2.new(1, -24, 0, 38)
+		body.TextWrapped = true
+		body.TextYAlignment = Enum.TextYAlignment.Top
+		card.Activated:Connect(function() card:Destroy() end)
+		task.delay(math.max(0, tonumber(duration) or 4), function()
+			if card.Parent then card:Destroy() end
+		end)
+		return card
+	end
 	local reopen = button(launcher, "Abrir painel", 15)
 	reopen.Name = "Reabrir"
 	reopen.Size = UDim2.fromOffset(116,44)
@@ -269,6 +344,7 @@ local player = Players.LocalPlayer
 
 	local tabCount = 0
 	local pageTransition
+	local registerSearchResult
 	function window:CreateTab(name, icon)
 		tabCount += 1
 		local index = tabCount
@@ -557,7 +633,41 @@ local player = Players.LocalPlayer
 			end
 			return field
 		end
+		if registerSearchResult then registerSearchResult(name, tab) end
 		return tab
+	end
+
+	local search = window:CreateTab("Search", "⌕")
+	local query = make("TextBox", {Name = "Busca", Text = "", PlaceholderText = "Buscar abas...",
+		ClearTextOnFocus = false, BackgroundColor3 = C.field, TextColor3 = C.text,
+		PlaceholderColor3 = C.muted, Font = Enum.Font.Gotham, TextSize = 15,
+		Size = UDim2.new(1, 0, 0, 42), LayoutOrder = -2}, search.Page)
+	corner(query, 6)
+	local empty = label(search.Page, "Nenhuma aba encontrada", 13, C.muted)
+	empty.Size = UDim2.new(1, 0, 0, 30)
+	local results = {}
+	local function filterResults()
+		local term = string.lower(query.Text)
+		local found = false
+		for _, result in results do
+			result.button.Visible = string.find(result.name, term, 1, true) ~= nil
+			found = found or result.button.Visible
+		end
+		empty.Visible = not found
+		search.Page.CanvasPosition = Vector2.zero
+	end
+	query:GetPropertyChangedSignal("Text"):Connect(filterResults)
+	registerSearchResult = function(name, tab)
+		local result = button(search.Page, name, 14)
+		result.LayoutOrder = #results + 1
+		result.Size = UDim2.new(1, 0, 0, 40)
+		result.Activated:Connect(function()
+			query:ReleaseFocus()
+			tab:Select()
+		end)
+		table.insert(results, {name = string.lower(name), button = result})
+		filterResults()
+		if #results == 1 then tab:Select() end
 	end
 
 	return window
